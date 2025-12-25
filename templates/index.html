@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Nhận Diện Cảm Xúc</title>
+    <style>
+        /* CSS CHO ĐIỆN THOẠI VÀ MÁY TÍNH */
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 10px; }
+        
+        .container { 
+            width: 100%; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            padding: 15px; 
+            box-sizing: border-box; 
+        }
+
+        h1 { color: #1a73e8; font-size: 24px; margin-bottom: 15px; }
+        
+        .user-input-group { margin-bottom: 15px; }
+        .user-input-group input { 
+            padding: 12px; width: 100%; max-width: 300px; 
+            border: 2px solid #ddd; border-radius: 6px; 
+            font-size: 16px; outline: none; box-sizing: border-box;
+        }
+
+        /* KHUNG CAMERA RESPONSIVE */
+        .display-area { 
+            position: relative; width: 100%; height: 0;
+            padding-bottom: 75%; /* Tỉ lệ 4:3 */
+            background: #000; border-radius: 10px; 
+            overflow: hidden; margin-bottom: 15px;
+        }
+        
+        video, canvas { 
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%; object-fit: cover; 
+        }
+        
+        .mirror-video { transform: scaleX(-1); }
+
+        .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .btn { 
+            padding: 12px 15px; font-size: 14px; cursor: pointer; 
+            color: white; border: none; border-radius: 6px; 
+            font-weight: bold; flex: 1 1 auto; min-width: 100px;
+        }
+        .btn-cam { background: #4CAF50; }
+        .btn-upload { background: #2196F3; }
+        .btn-stop { background: #f44336; }
+        .btn-link { background: #607D8B; text-decoration: none; display: flex; align-items: center; justify-content: center;}
+        
+        #result-text { font-size: 18px; font-weight: bold; color: #333; margin-top: 10px; min-height: 25px;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🤖 AI Cảm Xúc</h1>
+
+    <div class="user-input-group">
+        <input type="text" id="username" placeholder="Nhập tên của bạn..." required>
+    </div>
+
+    <div class="display-area">
+        <video id="video" autoplay playsinline class="mirror-video"></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="result-text">Vui lòng nhập tên</div>
+
+    <div class="controls">
+        <button class="btn btn-cam" onclick="startCamera()">📸 Bật Cam</button>
+        <button class="btn btn-stop" onclick="stopCamera()">🛑 Tắt</button>
+        <label for="fileInput" class="btn btn-upload">📂 Tải Ảnh</label>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleUpload()">
+        <a href="/history" target="_blank" class="btn btn-link">📜 Lịch Sử</a>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const resultText = document.getElementById('result-text');
+    const nameInput = document.getElementById('username');
+    let intervalId = null;
+    let isCameraMode = true;
+
+    function resizeCanvas() {
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+    }
+
+    function checkName() {
+        const name = nameInput.value.trim();
+        if (!name) {
+            alert("Bạn chưa nhập tên kìa!");
+            nameInput.focus();
+            return false;
+        }
+        return name;
+    }
+
+    async function startCamera() {
+        if (!checkName()) return;
+        stopCamera();
+        isCameraMode = true;
+        video.style.display = "block";
+        
+        try {
+            const constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            
+            video.onloadedmetadata = () => { resizeCanvas(); };
+            resultText.innerText = "Đang chạy...";
+            intervalId = setInterval(sendFrameToServer, 500);
+        } catch (err) { 
+            alert("Lỗi Camera (Hãy dùng HTTPS/Ngrok): " + err); 
+        }
+    }
+
+    function stopCamera() {
+        if (intervalId) clearInterval(intervalId);
+        if (video.srcObject) {
+            video.srcObject.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        resultText.innerText = "Đã dừng";
+    }
+
+    function sendFrameToServer() {
+        if (!isCameraMode) return;
+        if (canvas.width !== video.videoWidth) resizeCanvas();
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
+        tempCanvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        fetch('/process_frame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                image: tempCanvas.toDataURL('image/jpeg', 0.6), 
+                username: nameInput.value 
+            })
+        })
+        .then(res => res.json()).then(data => drawResult(data))
+        .catch(err => console.log("Lỗi mạng"));
+    }
+
+    function handleUpload() {
+        if (!checkName()) return;
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return;
+
+        stopCamera();
+        isCameraMode = false;
+        video.style.display = "none";
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width; canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                uploadToServer(file);
+            }
+            img.src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+    }
+
+    function uploadToServer(file) {
+        resultText.innerText = "Đang xử lý...";
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('username', nameInput.value);
+
+        fetch('/upload', { method: 'POST', body: formData })
+        .then(res => res.json()).then(data => drawResult(data))
+        .catch(err => alert("Lỗi tải ảnh: " + err));
+    }
+
+    function drawResult(data) {
+        if (isCameraMode) ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (data.has_face) {
+            let [x, y, w, h] = data.box;
+            if (isCameraMode) x = canvas.width - x - w;
+
+            ctx.beginPath();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "#00FF00";
+            ctx.rect(x, y, w, h);
+            ctx.stroke();
+
+            ctx.font = "bold 24px Arial";
+            ctx.fillStyle = "#00FF00";
+            ctx.fillText(data.emotion, x, y > 30 ? y - 10 : y + h + 30);
+            
+            resultText.innerText = `${nameInput.value}: ${data.emotion}`;
+            resultText.style.color = "green";
+        } else {
+            resultText.innerText = "Không thấy mặt";
+            resultText.style.color = "red";
+        }
+    }
+</script>
+
+</body>
+</html>

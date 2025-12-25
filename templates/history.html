@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lịch Sử Tra Cứu</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1a73e8; margin-bottom: 20px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #2196F3; color: white; position: sticky; top: 0; }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .empty-msg { text-align: center; padding: 20px; color: #666; font-style: italic; }
+        .btn-home { display: inline-block; margin-bottom: 15px; text-decoration: none; color: #2196F3; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/" class="btn-home">⬅ Quay lại trang chủ</a>
+    <h1>📜 Lịch Sử Nhận Diện</h1>
+    
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Thời Gian</th>
+                    <th>Người Dùng</th>
+                    <th>Cảm Xúc</th>
+                    <th>Độ Tin Cậy</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>{{ record.timestamp.strftime('%H:%M:%S %d/%m/%Y') }}</td>
+                    <td style="font-weight: bold; color: #d32f2f;">{{ record.username }}</td>
+                    <td>{{ record.emotion }}</td>
+                    <td>{{ (record.confidence * 100) | round(1) }}%</td>
+                    <td>{{ record.ip_address }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="empty-msg">Chưa có dữ liệu nào được lưu.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</body>
+</html>
