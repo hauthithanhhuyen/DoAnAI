@@ -60,7 +60,7 @@
 <body>
 
 <div class="container">
-    <h1>🤖 AI Cảm Xúc</h1>
+    <h1>🤖 AI Cảm Xúc (Bản Fix Nhẹ)</h1>
 
     <div class="user-input-group">
         <input type="text" id="username" placeholder="Nhập tên của bạn..." required>
@@ -118,10 +118,11 @@
             video.srcObject = stream;
             
             video.onloadedmetadata = () => { resizeCanvas(); };
-            resultText.innerText = "Đang chạy...";
-            intervalId = setInterval(sendFrameToServer, 500);
+            resultText.innerText = "Đang kết nối Server...";
+            // Tăng thời gian gửi lên 1000ms (1 giây) để giảm tải cho Server
+            intervalId = setInterval(sendFrameToServer, 1000);
         } catch (err) { 
-            alert("Lỗi Camera (Hãy dùng HTTPS/Ngrok): " + err); 
+            alert("Lỗi Camera (Hãy dùng HTTPS): " + err); 
         }
     }
 
@@ -135,24 +136,46 @@
         resultText.innerText = "Đã dừng";
     }
 
+    // --- HÀM QUAN TRỌNG ĐÃ ĐƯỢC SỬA ---
     function sendFrameToServer() {
         if (!isCameraMode) return;
         if (canvas.width !== video.videoWidth) resizeCanvas();
 
+        // TẠO CANVAS PHỤ ĐỂ THU NHỎ ẢNH
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
-        tempCanvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Ép ảnh xuống còn chiều rộng 200px (Rất nhẹ)
+        const targetWidth = 200; 
+        const scale = targetWidth / video.videoWidth;
+        const targetHeight = video.videoHeight * scale;
+
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+
+        // Vẽ ảnh nhỏ lên tempCanvas
+        tempCanvas.getContext('2d').drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
         
+        // Gửi ảnh nhỏ đi
         fetch('/process_frame', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                image: tempCanvas.toDataURL('image/jpeg', 0.6), 
+                image: tempCanvas.toDataURL('image/jpeg', 0.5), // Giảm chất lượng xuống 0.5
                 username: nameInput.value 
             })
         })
-        .then(res => res.json()).then(data => drawResult(data))
-        .catch(err => console.log("Lỗi mạng"));
+        .then(res => res.json())
+        .then(data => {
+            // Khi nhận được tọa độ, ta phải phóng to nó lên lại để vẽ vừa màn hình
+            if(data.box){
+                // Server trả về tọa độ của ảnh 200px, ta phải nhân ngược lên
+                const scaleBack = video.videoWidth / 200;
+                data.box = data.box.map(x => x * scaleBack);
+            }
+            drawResult(data);
+        })
+        .catch(err => {
+            console.log("Lỗi gửi ảnh (Có thể do mạng hoặc Server busy):", err);
+        });
     }
 
     function handleUpload() {
@@ -193,7 +216,12 @@
 
         if (data.has_face) {
             let [x, y, w, h] = data.box;
-            if (isCameraMode) x = canvas.width - x - w;
+            
+            // Xử lý lật gương nếu đang dùng cam trước
+            if (isCameraMode) {
+                // Tọa độ x cần lật ngược lại
+                x = canvas.width - x - w;
+            }
 
             ctx.beginPath();
             ctx.lineWidth = 4;
@@ -203,13 +231,17 @@
 
             ctx.font = "bold 24px Arial";
             ctx.fillStyle = "#00FF00";
+            // Vẽ chữ lên trên khung
             ctx.fillText(data.emotion, x, y > 30 ? y - 10 : y + h + 30);
             
             resultText.innerText = `${nameInput.value}: ${data.emotion}`;
             resultText.style.color = "green";
         } else {
-            resultText.innerText = "Không thấy mặt";
-            resultText.style.color = "red";
+            // Nếu không thấy mặt thì thôi, không cần báo đỏ liên tục gây khó chịu
+            if(!isCameraMode) {
+                 resultText.innerText = "Không thấy mặt";
+                 resultText.style.color = "red";
+            }
         }
     }
 </script>
