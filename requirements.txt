@@ -4,5 +4,6 @@ psycopg2-binary
 fer
 tensorflow-cpu
 opencv-python-headless
-numpy
+numpy==1.24.3
+Pillow==10.2.0
 gunicorn
